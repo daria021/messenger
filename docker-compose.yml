@@ -1,0 +1,118 @@
+services:
+  db_chat:
+    image: postgres:16
+    container_name: db_chat_service
+    env_file: src/chat-service/.env
+    ports:
+      - "5431:5432"
+    environment:
+      - POSTGRES_PASSWORD=postgres
+    restart: unless-stopped
+    volumes:
+      - chat_data:/var/lib/postgresql/data/
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+  app_chat:
+    build:
+      context: src/chat-service
+      dockerfile: Dockerfile
+    env_file: src/chat-service/.env
+    container_name: chat_service
+    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000" ]
+    ports:
+      - "9998:8000"
+    depends_on:
+      - rabbitmq
+      - db_chat
+    restart: unless-stopped
+
+
+  db_message:
+    image: postgres:16
+    container_name: db_message_service
+    env_file: src/message-service/.env
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_PASSWORD=postgres
+    restart: unless-stopped
+    volumes:
+      - message_data:/var/lib/postgresql/data/
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+  app_message:
+    build:
+      context: src/message-service
+      dockerfile: Dockerfile
+    env_file: src/message-service/.env
+    container_name: message_service
+    command: [ "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000" ]
+    ports:
+      - "9999:8000"
+    depends_on:
+      - rabbitmq
+      - db_message
+    restart: unless-stopped
+
+  db_user:
+    image: postgres:16
+    container_name: db_user_service
+    env_file: src/user-service/.env
+    ports:
+      - "5433:5432"
+    environment:
+      - POSTGRES_PASSWORD=postgres
+    restart: unless-stopped
+    volumes:
+      - user_data:/var/lib/postgresql/data/
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+  app_user:
+    build:
+      context: src/user-service
+      dockerfile: Dockerfile
+    env_file: src/user-service/.env
+    container_name: user_service
+    command: [ "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000" ]
+    ports:
+      - "9997:8000"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      db_user:
+        condition: service_started
+    restart: unless-stopped
+
+  app_ws:
+    build:
+      context: src/ws-service
+      dockerfile: Dockerfile
+    env_file: src/ws-service/.env
+    container_name: ws_service
+    command: [ "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000" ]
+    ports:
+      - "9996:8000"
+    restart: unless-stopped
+
+  rabbitmq:
+    image: "rabbitmq:3-management"
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: user
+      RABBITMQ_DEFAULT_PASS: password
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      timeout: 20s
+      retries: 3
+
+
+volumes:
+  chat_data:
+  user_data:
+  message_data:
+version: '3.8'
+
+
+
